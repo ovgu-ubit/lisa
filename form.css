@@ -1,0 +1,202 @@
+/* Smooth scrolling together with anchors is only working with FireFox browser */
+@-moz-document url-prefix() {
+	html {
+		scroll-behavior: smooth;
+	}
+}
+
+body {
+	margin: 0px 0px 0px 0px;
+	padding: 96px 8px 8px 8px;
+	background-image: url("res/logo_ovgu.png");
+	background-repeat: no-repeat;
+	background-position: center 8px;
+	font-family: "Helvetica Neue", "Helvetica", "Arial", "Lucida Grande", "Lucida Sans", "Open Sans", "sans-serif";
+	text-align: center;
+	color: #606060;
+}
+
+body#help {
+	text-align: left;
+}
+
+p.center {
+	text-align: center;
+}
+
+p.parameter {
+	margin: 0px;
+}
+
+p.parameter.last {
+	margin-bottom: 16px;
+}
+
+a.jump_link {
+	color: #7A003F;
+	font-size: large;
+	font-weight: bold;
+	text-decoration: none;
+	text-shadow: 1px 1px 2px #BC7F9F;
+}
+
+h1 {
+	margin: 32px;
+	text-shadow: 1px 1px 2px grey;
+}
+
+hr#stripline {
+	border-width: 0px 0px 2px 0px;
+	border-style: dashed;
+}
+
+span.error {
+	font-weight: bold;
+	color: Maroon;
+}
+
+div {
+	margin: 0px;
+	padding: 0px;
+}
+
+div.add_remove {
+	float: right;
+}
+
+fieldset {
+	margin: 0px 0px 8px 0px;
+	padding: 8px;
+	border-radius: 16px;
+	display: inline-block;
+	text-align: left;
+	background-color: Snow;
+	width: 521px;
+}
+
+fieldset legend {
+	text-align: center;
+	font-weight: bold;
+}
+
+fieldset.error {
+	color: Maroon;
+	background-color: MistyRose;
+}
+
+fieldset.error span {
+	font-size: smaller;
+}
+
+table {
+	margin: 16px 0px 0px 0px;
+	border: 0px;
+	padding: 0px;
+	color: #606060;
+	width: 100%;
+}
+
+table td {
+	padding: 0px;
+	vertical-align: top;
+}
+
+table td.left {
+	padding: 0px 4px 0px 0px;
+	text-align: right;
+	white-space: nowrap;
+}
+
+table td.right {
+	width: 100%;
+}
+
+table td.info {
+	text-align: right;
+}
+
+table#form {
+	text-align: center;
+}
+
+table#form td.margin {
+	width: 276px;
+}
+
+table#form td fieldset#options {
+	width: auto;
+}
+
+form {
+	margin: 0px;
+}
+
+input[type=number]#max_years {
+	margin: 0px;
+}
+
+input[type=search] {
+	margin: 0px;
+	width: 100%;
+}
+
+input[type=submit] {
+	margin: 8px 0px 32px 0px;
+	padding: 8px;
+	border-radius: 8px;
+	border-color: #707070;
+	font-size: medium;
+	font-weight: bold;
+	width: 540px;
+}
+
+input[type=submit].add {
+	margin: 2px 0px 0px 0px;
+	padding: 0px;
+	border-width: 1px;
+	border-style: solid;
+	border-color: DarkGreen;
+	border-radius: 10px;
+	color: DarkGreen;
+	background-color: HoneyDew;
+	font-size: medium;
+	font-weight: bold;
+	width: 20px;
+	height: 20px;
+}
+
+input[type=submit].remove {
+	margin: 2px 0px 0px 0px;
+	padding: 0px;
+	border-width: 1px;
+	border-style: solid;
+	border-color: DarkRed;
+	border-radius: 10px;
+	color: DarkRed;
+	background-color: LavenderBlush;
+	font-size: medium;
+	font-weight: bold;
+	width: 20px;
+	height: 20px;
+}
+
+input[type=submit].remove:disabled {
+	border-color: DarkGray;
+	color: DarkGray;
+	background-color: Snow;
+}
+
+input[type=submit].button, button[type=button].button {
+	margin: 4px 0px 4px 0px;
+	padding: 4px;
+	border-radius: 8px;
+	display: block;
+	font-size: small;
+	font-weight: bold;
+	width: 260px;
+}
+
+select {
+	width: 80px;
+	height: 21px;
+}

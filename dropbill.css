@@ -1,0 +1,163 @@
+/* Drop bill output */
+div#dropbill_frame {
+	display: block;
+	font-family: "Helvetica Neue", "Helvetica", "Arial", "Lucida Grande", "Lucida Sans", "Open Sans", "sans-serif";
+	text-align: left;
+	color: #606060;
+}
+
+div#dropbill_frame div.item {
+	background-color: Snow;
+}
+
+div#dropbill_frame div.famitem {
+	background-color: Ivory;
+}
+
+div#dropbill_frame a.anchor {
+	display: block;
+	visibility: hidden;
+}
+
+div#dropbill_frame span.information {
+	margin: 0pxx;
+	padding: 0px 0px 18px 0px;
+	display: block;
+	color: DarkRed;
+	font-style: italic;
+}
+
+div#dropbill_frame p {
+	margin: 0px 0px 16px 0px;
+}
+
+div#dropbill_frame p.parameter {
+	margin: 0px 0px 16px 0px;
+	font-size: smaller;
+	font-weight: bold;
+	font-style: normal;
+	text-decoration: none;
+}
+
+div#dropbill_frame p.parameter span {
+	font-style: italic;
+}
+
+div#dropbill_frame hr {
+	margin: 24px 0px 8px 0px;
+}
+
+div#dropbill_frame h1 {
+	margin: 16px 0px 32px 0px;
+	text-align: center;
+	text-shadow: 1px 1px 2px grey;
+}
+
+div#dropbill_frame h2 {
+	margin: 0px 0px 8px 0px;
+	text-shadow: 1px 1px 1px grey;
+}
+
+div#dropbill_frame table {
+	margin: 0px 0px 0px 0px;
+	width: 100%;
+}
+
+div#dropbill_frame table.header {
+	margin: 0px -2px 0px -2px;
+	padding: 0px;
+	table-layout: fixed;
+	vertical-align: middle;
+	width: 60%;
+	min-width: 720px;
+}
+
+div#dropbill_frame table.header tr {
+	height: 22px;
+}
+
+div#dropbill_frame table.header td {
+	padding: 0px 0px 16px 0px;
+}
+
+div#dropbill_frame table.header td div {
+	margin: 0px 8px 0px 0px;
+	float: left;
+}
+
+div#dropbill_frame table.header td div.field_mark {
+	margin: 0px 16px 0px 4px;
+	padding: 0px 64px 0px 0px;
+	border-width: 0px 0px 1px 0px;
+	border-style: dashed;
+	border-color: #606060;
+	display: block;
+	overflow: hidden;
+	height: 18px;
+}
+
+div#dropbill_frame table.header td div.check_mark {
+	margin: -2px 4px -2px 0px;
+	padding: 0px;
+	border-width: 1px;
+	border-style: solid;
+	border-color: #606060;
+	width: 18px;
+	height: 18px;
+}
+
+
+div#dropbill_frame table.header td div.last_column {
+	float: none;
+}
+
+div#dropbill_frame table.copy {
+	margin: 8px 0px 8px 0px;
+	padding: 0px;
+	text-align: left;
+	vertical-align: top;
+	font-size: small;
+	border-collapse: collapse;
+}
+
+div#dropbill_frame table.copy th {
+	padding: 4px;
+	border: 1px solid #606060;
+	color: white;
+	background-color: #606060;
+	width: auto;
+}
+
+div#dropbill_frame table.copy td {
+	padding: 4px;
+	border: 1px solid #606060;
+	width: auto;
+}
+
+div#dropbill_frame table.copy td.null {
+	font-style: italic;
+	color: DarkGray;
+}
+
+div#dropbill_frame table.copy td.value {
+	font-weight: bold;
+	background-color: WhiteSmoke;
+}
+
+div#dropbill_frame table.copy td.last {
+	font-weight: bold;
+	background-color: HoneyDew;
+}
+
+div#dropbill_frame table.copy td.sum {
+	font-weight: bold;
+	background-color: LightGray;
+}
+
+div#dropbill_frame table.footer {
+	width: 100%;
+}
+
+div#dropbill_frame table.footer td div.field_mark {
+	margin: 0px 0px 0px 4px;
+}

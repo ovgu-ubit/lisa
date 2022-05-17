@@ -1,0 +1,5 @@
+IndexIgnore *
+DirectoryIndex index.php
+<FilesMatch ^(?!(\A\Z|index\.php|.*\.(html|css|js|png|ico)))$>
+	Require all denied
+</FilesMatch>
