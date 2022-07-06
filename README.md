@@ -13,3 +13,4 @@ The backend of the server connects the LBS4 database (via JDBC parameterized in 
 - restart jetty service
 
 ## frontend
+Adapt PHP source files and include them in a web server to run the application.
