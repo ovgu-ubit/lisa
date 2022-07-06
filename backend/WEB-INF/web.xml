@@ -1,0 +1,27 @@
+<web-app
+	xmlns="http://xmlns.jcp.org/xml/ns/javaee"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://xmlns.jcp.org/xml/ns/javaee
+		http://xmlns.jcp.org/xml/ns/javaee/web-app_3_1.xsd"
+	version="3.1">
+	<!-- Name-to-class mapping -->
+	<servlet>
+		<servlet-name>SRU_Engine</servlet-name>
+		<servlet-class>SRU_Engine</servlet-class>
+	</servlet>
+	<!-- Name-to-route mapping -->
+	<servlet-mapping>
+		<servlet-name>SRU_Engine</servlet-name>
+		<url-pattern>/query</url-pattern>
+	</servlet-mapping>
+	<!-- Deny non-secure HTTP requests -->
+	<security-constraint>
+		<web-resource-collection>
+			<web-resource-name>Everything</web-resource-name>
+			<url-pattern>/*</url-pattern>
+		</web-resource-collection>
+		<user-data-constraint>
+			<transport-guarantee>CONFIDENTIAL</transport-guarantee>
+		</user-data-constraint>
+	</security-constraint>
+</web-app>
