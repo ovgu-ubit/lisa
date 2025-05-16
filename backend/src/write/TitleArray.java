@@ -7,18 +7,19 @@ import model.Title;
 
 /**
  * TitleWriter that stores an array of Title objects for processing
+ * 
  * @author sbosse
  *
  */
-public class TitleArray implements TitleWriter{
+public class TitleArray implements TitleWriter {
 
 	List<Title> titles;
 	boolean superInfos;
-	
+
 	public TitleArray(boolean superInfos) {
 		this.superInfos = superInfos;
 	}
-	
+
 	@Override
 	public void addTitle(Title title) {
 		this.titles.add(title);
@@ -26,14 +27,15 @@ public class TitleArray implements TitleWriter{
 
 	@Override
 	public void close() {
-		
+
 	}
 
 	@Override
-	public void init(String query) {
+	public String init(String query) {
 		titles = new ArrayList<Title>();
+		return "";
 	}
-	
+
 	public List<Title> getTitles() {
 		return titles;
 	}
@@ -42,7 +44,5 @@ public class TitleArray implements TitleWriter{
 	public boolean superInfos() {
 		return superInfos;
 	}
-	
-
 
 }

@@ -6,10 +6,8 @@ import java.net.MalformedURLException;
 import java.net.URL;
 import java.sql.SQLException;
 import java.util.ArrayList;
-import java.util.Calendar;
-import java.util.Collections;
+import java.util.Date;
 import java.util.List;
-import java.util.stream.Collectors;
 
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
@@ -24,7 +22,6 @@ import org.xml.sax.SAXException;
 
 import model.Title;
 import model.Title.Copy;
-import model.Title.Copy.Statistic;
 import write.TitleWriter;
 
 /**
@@ -34,12 +31,13 @@ import write.TitleWriter;
  * @author sbosse
  *
  */
-public class XMLReader {
+public class XMLReader implements TitleReader {
 
 	QueryFactory qf;
 	TitleWriter tw;
 
 	DatabaseConnection db;
+	DatabaseConnection db_local;
 
 	int numPerQuery = 500;
 
@@ -50,7 +48,7 @@ public class XMLReader {
 	 * @param tw
 	 */
 	public XMLReader(QueryFactory qf, TitleWriter tw) {
-		this(qf, tw, null);
+		this(qf, tw, null, null);
 	}
 
 	/**
@@ -60,10 +58,11 @@ public class XMLReader {
 	 * @param tw
 	 * @param db
 	 */
-	public XMLReader(QueryFactory qf, TitleWriter tw, DatabaseConnection db) {
+	public XMLReader(QueryFactory qf, TitleWriter tw, DatabaseConnection db, DatabaseConnection db_local) {
 		this.qf = qf;
 		this.tw = tw;
 		this.db = db;
+		this.db_local = db_local;
 	}
 
 	/**
@@ -79,12 +78,12 @@ public class XMLReader {
 
 	public boolean retrieve(String searchStringCQL, int max_results, boolean write, int[] stat_years)
 			throws QueryErrorException {
-		return retrieve(searchStringCQL, max_results, 1, write, stat_years, false, false, false);
+		return retrieve(searchStringCQL, max_results, 1, write, stat_years, false, false, false, true);
 	}
 
 	public boolean retrieve(String searchStringCQL, int max_results, int pos, boolean write, int[] stat_years)
 			throws QueryErrorException {
-		return retrieve(searchStringCQL, max_results, pos, write, stat_years, false, false, false);
+		return retrieve(searchStringCQL, max_results, pos, write, stat_years, false, false, false, true);
 	}
 
 	/**
@@ -112,9 +111,10 @@ public class XMLReader {
 	 * @throws QueryErrorException
 	 */
 	public boolean retrieve(String searchStringCQL, int max_results, boolean write, int[] stat_years,
-			boolean orderInfos, boolean GVK_infos, boolean classInfosFromSuperTitle) throws QueryErrorException {
+			boolean orderInfos, boolean GVK_infos, boolean classInfosFromSuperTitle, boolean distinct)
+			throws QueryErrorException {
 		return retrieve(searchStringCQL, max_results, 1, write, stat_years, orderInfos, GVK_infos,
-				classInfosFromSuperTitle);
+				classInfosFromSuperTitle, distinct);
 	}
 
 	DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
@@ -136,9 +136,11 @@ public class XMLReader {
 	 */
 	public int retrieveCount(String searchStringCQL) throws QueryErrorException {
 		URL query = qf.getQueryCQL(searchStringCQL, 1, 1);
-		this.retrieveXML(query, true);
+		this.retrieveXML(query, true, false);
 		return count;
 	}
+
+	boolean debug = false;
 
 	/**
 	 * retrieve function using a starting position for the XML response
@@ -147,7 +149,8 @@ public class XMLReader {
 	 * @return if results have been retrieved successfully
 	 */
 	public boolean retrieve(String searchStringCQL, int max_results, int pos, boolean write, int[] stat_years,
-			boolean orderInfos, boolean GVK_infos, boolean classInfosFromSuperTitle) throws QueryErrorException {
+			boolean orderInfos, boolean GVK_infos, boolean classInfosFromSuperTitle, boolean distinct)
+			throws QueryErrorException {
 
 		if (write)
 			tw.init(searchStringCQL);
@@ -181,14 +184,23 @@ public class XMLReader {
 
 			// retrieve XML document from URL response
 			this.tries = 0;
-			NodeList nListRecords = this.retrieveXML(query, true);
+			Date start = new Date();
+			NodeList nListRecords = this.retrieveXML(query, true, true);
 
-			// System.out.println("XML retrieval finished at "+System.currentTimeMillis());
+			if (debug)
+				System.out.println(
+						"XML retrieval finished at " + ((System.currentTimeMillis() - start.getTime()) / 1000.0));
 
 			if (nListRecords == null) {
 				return false;
 			}
-
+			if (debug)
+				start = new Date();
+			double XMLtime = 0;
+			double DBtime = 0;
+			double writeTime = 0;
+			double familyTime = 0;
+			double GVKtime = 0;
 			for (int temp = 0; temp < nListRecords.getLength(); temp++) {
 				Node nNode = nListRecords.item(temp);
 				if (nNode.getNodeType() == Node.ELEMENT_NODE) {
@@ -196,18 +208,24 @@ public class XMLReader {
 
 					Title t;
 					List<Title> subtitles = null;
+					if (debug)
+						start = new Date();
 					if (tmpTitle == null)
 						t = new Title(eElement);
 					else { // title already from DB, only adding infos from SRU
 						t = tmpTitle;
 						t.retrieveFromXML(eElement);
 					}
-
+					if (debug)
+						XMLtime += (System.currentTimeMillis() - start.getTime()) / 1000.0;
+					if (debug)
+						start = new Date();
 					// if DB connection is defined, the loan statistic is retrieved from the DB
 					if (this.db != null && stat_years != null && stat_years.length != 0) {
 						try {
 							t.addDBStats(this.db, stat_years);
 						} catch (SQLException e) {
+							e.printStackTrace();
 							throw new QueryErrorException(300,
 									"There was an error retrieving loan statistics from the DB.", "unknown");
 						}
@@ -222,13 +240,17 @@ public class XMLReader {
 									"unknown");
 						}
 					}
+					if (debug)
+						DBtime += (System.currentTimeMillis() - start.getTime()) / 1000.0;
 
+					if (debug)
+						start = new Date();
 					// Holen der Familieninfos
 					if (tw.superInfos()) {
-						if (!t.superPPN.isEmpty() && t.classification.isEmpty()) {
-							URL query2 = qf.getQueryCQL("pica.ppn=" + t.superPPN, 1, 1);
+						if (!t.super_ppn.isEmpty() && t.classification.isEmpty()) {
+							URL query2 = qf.getQueryCQL("pica.ppn=" + t.super_ppn, 1, 1);
 							// retrieve XML document from URL response
-							NodeList nListRecords2 = this.retrieveXML(query2, false);
+							NodeList nListRecords2 = this.retrieveXML(query2, false, false);
 							if (nListRecords2 != null)
 								for (int temp2 = 0; temp2 < nListRecords2.getLength(); temp2++) {
 									Node nNode2 = nListRecords2.item(temp2);
@@ -239,17 +261,22 @@ public class XMLReader {
 								}
 						}
 					}
+					if (debug)
+						familyTime += (System.currentTimeMillis() - start.getTime()) / 1000.0;
 
+					if (debug)
+						start = new Date();
 					// Holen der GVK-Infos
-					if (GVK_infos) {
-						if (this.qf.databaseURI.compareTo("gvk") == 0) { // already retrieving from GVK
+					if ((GVK_infos || this.qf.databaseURI.compareTo("k10plus") == 0) && !t.ppn.isEmpty()
+							&& (t.material != null && t.material.charAt(0) != 'O')) {
+						if (this.qf.databaseURI.compareTo("k10plus") == 0) { // already retrieving from GVK
 							t.addGVKInfo(eElement);
 						} else {
 							try {
 								URL query3 = new URL(
-										"http://sru.k10plus.de/gvk?version=1.2&operation=searchRetrieve&query=pica.ppn=\""
+										"https://sru.k10plus.de/k10plus!levels=0,1?version=1.2&operation=searchRetrieve&query=pica.ppn=\""
 												+ t.ppn + "\"&recordSchema=picaxml&maximumRecords=1&startRecord=1");
-								NodeList nListRecords3 = this.retrieveXML(query3, false);
+								NodeList nListRecords3 = this.retrieveXML(query3, false, false);
 								if (nListRecords3 != null)
 									for (int temp3 = 0; temp3 < nListRecords3.getLength(); temp3++) {
 										Node nNode3 = nListRecords3.item(temp3);
@@ -263,16 +290,18 @@ public class XMLReader {
 							}
 						}
 					}
+					if (debug)
+						GVKtime += (System.currentTimeMillis() - start.getTime()) / 1000.0;
 
 					// hole (unklassifizierte) f-Stufen einer klassifizierten c-Stufe
 					boolean must_be_unclassified = true;
 
-					if (t.material.toLowerCase().charAt(1) == 'c' && classInfosFromSuperTitle
-							&& !t.classification.isEmpty()) {
+					if (!t.material.isEmpty() && t.material.length() > 1 && t.material.toLowerCase().charAt(1) == 'c'
+							&& classInfosFromSuperTitle && !t.classification.isEmpty()) {
 						URL query4 = qf.getQueryCQL(
 								"pica.1049=" + t.ppn + "+and+pica.1001=\"b\"+and+pica.1045=\"rel-nt\"", 500, 1);
-						NodeList nListRecords4 = this.retrieveXML(query4, false);
-						subtitles = t.getSubTitles(nListRecords4);
+						NodeList nListRecords4 = this.retrieveXML(query4, false, false);
+						subtitles = t.getSubTitles(nListRecords4, this.db_local);
 						for (Title t1 : subtitles) {
 							if ((!must_be_unclassified || t1.classification.isEmpty())) {
 								if (t1.classification.isEmpty())
@@ -286,13 +315,13 @@ public class XMLReader {
 												"unknown");
 									}
 								}
-								if (GVK_infos) {
+								if (GVK_infos && (t.material != null && t.material.charAt(0) != 'O')) {
 									try {
 										URL query3 = new URL(
-												"http://sru.k10plus.de/gvk?version=1.2&operation=searchRetrieve&query=pica.ppn=\""
+												"https://sru.k10plus.de/k10plus!levels=0,1?version=1.2&operation=searchRetrieve&query=pica.ppn=\""
 														+ t1.ppn
 														+ "\"&recordSchema=picaxml&maximumRecords=1&startRecord=1");
-										NodeList nListRecords3 = this.retrieveXML(query3, false);
+										NodeList nListRecords3 = this.retrieveXML(query3, false, false);
 										if (nListRecords3 != null)
 											for (int temp3 = 0; temp3 < nListRecords3.getLength(); temp3++) {
 												Node nNode3 = nListRecords3.item(temp3);
@@ -309,6 +338,8 @@ public class XMLReader {
 							}
 						}
 					}
+					if (debug)
+						start = new Date();
 
 					// TitleWriter is called to process the title or titles are collected
 					if (write) {
@@ -317,7 +348,9 @@ public class XMLReader {
 							for (Title t1 : subtitles)
 								if (!must_be_unclassified || t1.classification.contains("(c)"))
 									tw.addTitle(t1);
-					} else if (!collected.contains(t)) {
+						if (debug)
+							writeTime += (System.currentTimeMillis() - start.getTime()) / 1000.0;
+					} else if (!collected.contains(t) || !distinct) {
 						collected.add(t);
 						if (subtitles != null)
 							for (Title t1 : subtitles)
@@ -325,6 +358,13 @@ public class XMLReader {
 									collected.add(t1);
 					}
 				}
+			}
+			if (debug) {
+				System.out.println("XML time: " + XMLtime);
+				System.out.println("DB time: " + DBtime);
+				System.out.println("Write time: " + writeTime);
+				System.out.println("Family time: " + familyTime);
+				System.out.println("GVK time: " + GVKtime);
 			}
 		}
 		// System.out.println("Query finished");
@@ -337,23 +377,35 @@ public class XMLReader {
 	 * writes the currently retrieved title list to the TitleWriter and resets the
 	 * list
 	 */
-	public void write() {
-		this.write("");
+	public String write() {
+		return this.write("");
 	}
 
 	/**
 	 * writes the currently retrieved title list to the TitleWriter and resets the
 	 * list
 	 */
-	public void write(String prefix) {
-		System.out.println("Writing titles, "+errors+" titles not found");
-		tw.init(prefix + "_collected");
+	public String write(String prefix) {
+		System.out.println("Writing titles, " + errors + " titles not found");
+		String filename = tw.init(prefix + "_collected");
 		for (Title t : collected) {
 			tw.addTitle(t);
 		}
 		tw.close();
 		collected.clear();
 		errors = 0;
+		return filename;
+	}
+
+	public String write(List<Title> titles) {
+		System.out.println("Writing titles, " + errors + " titles not found");
+		String filename = tw.init("_collected");
+		for (Title t : titles) {
+			tw.addTitle(t);
+		}
+		tw.close();
+		errors = 0;
+		return filename;
 	}
 
 	/**
@@ -367,17 +419,51 @@ public class XMLReader {
 		System.out.println("Retrieving " + titles.size() + " titles...");
 		for (Title t : titles) {
 			tmpTitle = t;
-			if (!retrieve("pica.ppn=" + t.ppn + "?", 1, false, new int[] {}, orderInfos, false, false)) { // DB does not
-																											// include
-																											// leading
-																											// zeros
-				boolean flag = retrieve("pica.ppn=0" + t.ppn + "?", 1, false, new int[] {}, orderInfos, false, false);
-				if (!flag) errors++;
+			if (!retrieve("pica.ppn=" + t.ppn + "?", 1, false, new int[] {}, orderInfos, false, false, true)) { // DB
+																												// does
+																												// not
+				// include
+				// leading
+				// zeros
+				boolean flag = retrieve("pica.ppn=0" + t.ppn + "?", 1, false, new int[] {}, orderInfos, false, false,
+						true);
+				if (!flag)
+					errors++;
 			}
 			tmpTitle = null;
 		}
 	}
-	
+
+	public void retrieveFromEPNs(List<Title> titles, boolean orderInfos) throws QueryErrorException {
+		System.out.println("Retrieving " + titles.size() + " titles...");
+		for (Title t : titles) {
+			tmpTitle = t;
+			String epn = "";
+			for (Copy c : t.copies) {
+				if (!c.epn.isEmpty()) {
+					epn = c.epn;
+					break;
+				}
+			}
+			if (epn.isEmpty()) {
+				System.out.println("Error while processing EPN");
+				continue;
+			}
+			if (!retrieve("pica.epn=" + epn + "?", 1, false, new int[] {}, orderInfos, false, false, false)) { // DB
+																												// does
+																												// not
+																												// include
+																												// leading
+																												// zeros
+				boolean flag = retrieve("pica.epn=0" + epn + "?", 1, false, new int[] {}, orderInfos, false, false,
+						false);
+				if (!flag)
+					errors++;
+			}
+			tmpTitle = null;
+		}
+	}
+
 	int errors = 0;
 
 	int tries;
@@ -391,8 +477,9 @@ public class XMLReader {
 	 * @return
 	 * @throws QueryErrorException
 	 */
-	NodeList retrieveXML(URL query, boolean changeCount) throws QueryErrorException {
-		System.out.println(query);
+	NodeList retrieveXML(URL query, boolean changeCount, boolean printout) throws QueryErrorException {
+		if (printout)
+			System.out.println(query);
 		try {
 			doc_builder = dbf.newDocumentBuilder();
 		} catch (ParserConfigurationException e) {
@@ -414,7 +501,8 @@ public class XMLReader {
 		try {
 			c = Integer.parseInt(doc.getElementsByTagName("zs:numberOfRecords").item(0).getTextContent());
 		} catch (Exception e) {
-			System.out.println("Error while retrieving count, probably query not supported");
+			System.out.println(e);
+			System.out.println("Error while retrieving count, probably query not supported: " + query);
 		}
 		if (changeCount)
 			count = c;
@@ -434,7 +522,7 @@ public class XMLReader {
 						"The retrieved document does not match the expected syntax. Likely there was an error in the SRU interface",
 						"unknown");
 			else
-				return retrieveXML(query, changeCount);
+				return retrieveXML(query, changeCount, printout);
 		}
 
 		doc.getDocumentElement().normalize();
@@ -463,15 +551,15 @@ public class XMLReader {
 		}
 
 		if (t.material.toLowerCase().charAt(1) == 'f') {
-			query4 = qf.getQueryCQL("pica.1049=\"" + t.superPPN + "\"+and+pica.1001=\"b\"+and+pica.1045=\"fam\"", 500,
+			query4 = qf.getQueryCQL("pica.1049=\"" + t.super_ppn + "\"+and+pica.1001=\"b\"+and+pica.1045=\"fam\"", 500,
 					1);
-		} else if (t.material.toLowerCase().charAt(1) == 'c') {
+		} else if (t.material.toLowerCase().charAt(1) == 'c' || t.material.toLowerCase().charAt(1) == 'd') {
 			query4 = qf.getQueryCQL("pica.1049=\"" + t.ppn + "\"+and+pica.1001=\"b\"+and+pica.1045=\"rel-nt\"", 500, 1);
 		} else
 			return res;
 
-		NodeList nListRecords4 = this.retrieveXML(query4, false);
-		List<Title> subtitles = Title.getSubTitles(nListRecords4, t.ppn);
+		NodeList nListRecords4 = this.retrieveXML(query4, false, true);
+		List<Title> subtitles = Title.getSubTitles(nListRecords4, t.ppn, this.db_local);
 		for (Title t1 : subtitles) {
 			res.add(t1.ppn);
 		}
@@ -496,8 +584,8 @@ public class XMLReader {
 		}
 		query4 = qf.getQueryCQL("pica.1049=\"" + ppn + "\"+and+pica.1001=\"b\"+and+pica.1045=\"rel-nt\"", 500, 1);
 
-		NodeList nListRecords4 = this.retrieveXML(query4, false);
-		List<Title> subtitles = Title.getSubTitles(nListRecords4, ppn);
+		NodeList nListRecords4 = this.retrieveXML(query4, false, true);
+		List<Title> subtitles = Title.getSubTitles(nListRecords4, ppn, this.db_local);
 		for (Title t1 : subtitles) {
 			res.add(t1.ppn);
 		}
@@ -514,9 +602,9 @@ public class XMLReader {
 	public void close() {
 		if (this.db != null)
 			try {
-				db.dbDisconnect();
+				db.finalize();
 			} catch (SQLException e) {
-				System.err.println("There was an error trying to close the DB connection");
+				e.printStackTrace();
 			}
 	}
 
@@ -525,141 +613,7 @@ public class XMLReader {
 		this.close();
 	}
 
-	/**
-	 * method to provide an analysis on the set of collected titles based on their
-	 * classification
-	 * 
-	 * @param prefix the classification prefix to be considered
-	 * @return a csv-style String with classes and statistics
-	 */
-	public String analyzeLSY(String prefix) {
-		String res = "";
-		List<String> classes = new ArrayList<String>();
-		// find all classes
-		for (Title t : collected) {
-			if (t.classification.isEmpty()
-					|| !t.classification.replaceAll("[/+]", " ").startsWith(prefix.replaceAll("[/+]", " ")))
-				continue;
-			try {
-				String lsy = t.classification.split(" ")[0] + " " + t.classification.split(" ")[1];
-				if (!classes.contains(lsy))
-					classes.add(lsy);
-			} catch (ArrayIndexOutOfBoundsException e) {
-			}
-		}
-		// sort classification by length of String to avoid higher class assignment
-		Collections.sort(classes, Collections.reverseOrder());
-
-		// numbers are summed up for loans, loans of last 5 years, reservations
-		List<Integer> loans = new ArrayList<Integer>(classes.size());
-		List<Integer> loans5 = new ArrayList<Integer>(classes.size());
-		List<Integer> reserv = new ArrayList<Integer>(classes.size());
-		// total titles, total copies, titles never on loan and copies in stacks
-		List<Integer> titlesTotal = new ArrayList<Integer>(classes.size());
-		List<Integer> copiesTotal = new ArrayList<Integer>(classes.size());
-		List<Integer> titlesNever = new ArrayList<Integer>(classes.size());
-		List<Integer> copiesMag = new ArrayList<Integer>(classes.size());
-		// titles which are older than 20 years, which of them (and copies) were not on
-		// loan for 20 years; or had not more than 3 loans
-		List<Integer> titles20 = new ArrayList<Integer>(classes.size());
-		List<Integer> titles20not = new ArrayList<Integer>(classes.size());
-		List<Integer> copies20not = new ArrayList<Integer>(classes.size());
-		List<Integer> titles20three = new ArrayList<Integer>(classes.size());
-		List<Integer> copies20three = new ArrayList<Integer>(classes.size());
-
-		for (int i = 0; i < classes.size(); i++) {
-			loans.add(0);
-			loans5.add(0);
-			reserv.add(0);
-			titlesTotal.add(0);
-			copiesTotal.add(0);
-			titlesNever.add(0);
-			copiesMag.add(0);
-
-			titles20.add(0);
-			titles20not.add(0);
-			copies20not.add(0);
-			titles20three.add(0);
-			copies20three.add(0);
-		}
-
-		// assign title values to classes
-		int year = Calendar.getInstance().get(Calendar.YEAR);
-		for (Title t : collected) {
-			for (int i = 0; i < classes.size(); i++) {
-				if (!t.classification.startsWith(classes.get(i)))
-					continue;
-				else {
-					loans.set(i, loans.get(i) + t.cum_loans);
-					reserv.set(i, reserv.get(i) + t.cum_reserv);
-					titlesTotal.set(i, titlesTotal.get(i) + 1);
-					int co = 0;
-					int m = 0;
-					int l = 0;
-					for (Copy c : t.copies) {
-						if (!c.isLocked()) {
-							co++;
-							if (c.location.startsWith("Magazin"))
-								m++;
-						}
-						for (Statistic s : c.stats) {
-							if (s.year.contains("2007") || ((year - Integer.parseInt(s.year)) > 5))
-								continue;
-							l += s.num_loans;
-						}
-					}
-					loans5.set(i, loans5.get(i) + l);
-					copiesTotal.set(i, copiesTotal.get(i) + co);
-					copiesMag.set(i, copiesMag.get(i) + m);
-					if (t.cum_loans == 0 && co > 0)
-						titlesNever.set(i, titlesNever.get(i) + 1);
-
-					try {
-						if (year - Integer.parseInt(t.year_of_creation) > 20) {
-							titles20.set(i, titles20.get(i) + 1);
-							if (t.cum_loans == 0) {
-								titles20not.set(i, titles20not.get(i) + 1);
-								copies20not.set(i, copies20not.get(i) + co); // alle Ex
-							} else if (t.cum_loans <= 3) {
-								titles20three.set(i, titles20three.get(i) + 1);
-								if (co > 1)
-									copies20three.set(i, copies20three.get(i) + co - 1); // nur Mehrfach
-							}
-						}
-					} catch (NumberFormatException e) {
-						System.out.println("Creation year " + t.year_of_creation + " could not be parsed, skipping...");
-					}
-
-					break;
-				}
-			}
-		}
-		// header
-		res += "Sachgebiet;" + "Anzahl Titel;" + "Anzahl Exemplare nicht gesperrt;" + "Anzahl Entleihungen;"
-				+ "Anzahl Entleihungen letzte 5 Jahre;" + "Anzahl Vormerkungen;" + "Anzahl Titel nicht ausgeliehen;"
-				+ "Anzahl Exemplare Magazin;" + "Anzahl Titel älter als 20 Jahre;" + "davon nicht ausgeliehen;"
-				+ "mit Exemplarzahl;" + "davon 1-3 Mal ausgeliehen;" + "Mehrfachexemplare\n";
-		// rows
-		for (int i = 0; i < classes.size(); i++) {
-			res += classes.get(i) + ";" + titlesTotal.get(i) + ";" + copiesTotal.get(i) + ";" + loans.get(i) + ";"
-					+ loans5.get(i) + ";" + reserv.get(i) + ";" + titlesNever.get(i) + ";" + copiesMag.get(i) + ";"
-					+ titles20.get(i) + ";" + titles20not.get(i) + ";" + copies20not.get(i) + ";" + titles20three.get(i)
-					+ ";" + +copies20three.get(i) + "\n";
-		}
-		// sum
-		res += "\n";
-		res += "Summe;" + titlesTotal.stream().collect(Collectors.summingInt(Integer::intValue)) + ";"
-				+ copiesTotal.stream().collect(Collectors.summingInt(Integer::intValue)) + ";"
-				+ loans.stream().collect(Collectors.summingInt(Integer::intValue)) + ";"
-				+ loans5.stream().collect(Collectors.summingInt(Integer::intValue)) + ";"
-				+ reserv.stream().collect(Collectors.summingInt(Integer::intValue)) + ";"
-				+ titlesNever.stream().collect(Collectors.summingInt(Integer::intValue)) + ";"
-				+ copiesMag.stream().collect(Collectors.summingInt(Integer::intValue)) + ";"
-				+ titles20.stream().collect(Collectors.summingInt(Integer::intValue)) + ";"
-				+ titles20not.stream().collect(Collectors.summingInt(Integer::intValue)) + ";"
-				+ copies20not.stream().collect(Collectors.summingInt(Integer::intValue)) + ";"
-				+ titles20three.stream().collect(Collectors.summingInt(Integer::intValue)) + ";"
-				+ copies20three.stream().collect(Collectors.summingInt(Integer::intValue)) + "\n";
-		return res;
+	public boolean isDBvalid() throws SQLException {
+		return db != null && db.isValid();
 	}
 }

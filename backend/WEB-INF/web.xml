@@ -9,11 +9,27 @@
 		<servlet-name>SRU_Engine</servlet-name>
 		<servlet-class>SRU_Engine</servlet-class>
 	</servlet>
+	<servlet>
+		<servlet-name>InventoryEngine</servlet-name>
+		<servlet-class>InventoryEngine</servlet-class>
+	</servlet>
 	<!-- Name-to-route mapping -->
 	<servlet-mapping>
 		<servlet-name>SRU_Engine</servlet-name>
 		<url-pattern>/query</url-pattern>
 	</servlet-mapping>
+	<servlet-mapping>
+		<servlet-name>InventoryEngine</servlet-name>
+		<url-pattern>/inventory</url-pattern>
+	</servlet-mapping>
+	<filter>
+		<filter-name>CORSInterceptor</filter-name>
+		<filter-class>filter.CORSInterceptor</filter-class>
+	</filter>
+	<filter-mapping>
+		<filter-name>CORSInterceptor</filter-name>
+		<url-pattern>/*</url-pattern>
+	</filter-mapping>
 	<!-- Deny non-secure HTTP requests -->
 	<security-constraint>
 		<web-resource-collection>

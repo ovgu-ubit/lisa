@@ -1,0 +1,50 @@
+<?xml version="1.0"?>
+<!DOCTYPE Configure PUBLIC "-//Jetty//Configure//EN" "http://www.eclipse.org/jetty/configure_9_0.dtd">
+<Configure id="sru_engine" class="org.eclipse.jetty.webapp.WebAppContext">
+	<New class="org.eclipse.jetty.plus.jndi.EnvEntry">
+		<Arg><Ref refid="sru_engine" /></Arg>
+		<Arg>database/lbs</Arg>
+		<Arg>
+			<Map>
+				<Entry>
+					<Item type="java.lang.String">lbsdb_connection_string</Item>
+					<Item type="java.lang.String">jdbc:jtds:sybase://host.gbv.de:2025/lbsdb;user=[USER];password=[PASSWORD];</Item>
+				</Entry>
+				<Entry>
+					<Item type="java.lang.String">lbsdb_connection_string_test</Item>
+					<Item type="java.lang.String">jdbc:jtds:sybase://t-host:2025/lbsdb;user=[USER];password=[PASSWORD];</Item>
+				</Entry>
+				<Entry>
+					<Item type="java.lang.String">lbsdb_driver</Item>
+					<Item type="java.lang.String">net.sourceforge.jtds.jdbc.Driver</Item>
+				</Entry>
+			</Map>
+		</Arg>
+		<Arg type="boolean">true</Arg>
+	</New>
+	<New class="org.eclipse.jetty.plus.jndi.EnvEntry">
+		<Arg><Ref refid="sru_engine" /></Arg>
+		<Arg>system</Arg>
+		<Arg>
+			<Map>
+				<Entry>
+					<Item type="java.lang.String">dir</Item>
+					<Item type="java.lang.String">[USER_DIR]</Item>
+				</Entry>
+				<Entry>
+					<Item type="java.lang.String">import_file</Item>
+					<Item type="java.lang.String">import_rest.asc</Item>
+				</Entry>
+				<Entry>
+					<Item type="java.lang.String">key</Item>
+					<Item type="java.lang.String">./ssh/id_rsa</Item>
+				</Entry>
+				<Entry>
+					<Item type="java.lang.String">known_hosts</Item>
+					<Item type="java.lang.String">./ssh/known_hosts</Item>
+				</Entry>
+			</Map>
+		</Arg>
+		<Arg type="boolean">true</Arg>
+	</New>
+</Configure>

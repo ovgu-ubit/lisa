@@ -7,91 +7,118 @@ import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+
+import helper.ParamParsing;
 import model.Title;
+import model.serialize.DropbillSerializer;
+import retrieve.DatabaseConnection;
+import retrieve.LBSConnectionPool;
+import retrieve.LBSConnectionPool.TooManyConnectionsException;
 import retrieve.QueryErrorException;
 import services.DropbillRetriever;
-import write.ResponseFactoryJSON;
 
 public class SRU_Engine extends HttpServlet {
 
 	private static final long serialVersionUID = 1L;
-	private DropbillRetriever retriever;
-	private String sep = ";";
+	boolean test = false;
+	LBSConnectionPool db_pool = null;
+	DatabaseConnection db_local = null;
+	private final String sep = ";";
+	private Gson gson;
 
 	public SRU_Engine() {
 		try {
-			retriever = new DropbillRetriever();
-		} catch (ClassNotFoundException e) {
-			System.err.println("Error: DB Driver not found");
-		} catch (SQLException e) {
-			System.err.println("Error: DB Connection could not be established");
+			db_pool = new LBSConnectionPool(test);
+			gson = new GsonBuilder().registerTypeAdapter(Title.class, new DropbillSerializer()).create();
+		} catch (ClassNotFoundException | SQLException e) {
+			e.printStackTrace();
 		}
 	}
 
 	/**
-	 * main method for answering jetty requests
-	 * request query may contain parameters
-	 * ppn a set of semicolon-separated ppn strings to be retrieved
-	 * barcode a set of semicolon-separated barcode strings to be retrieved
-	 * signature a set of semicolon-separated signature strings to be retrieved
-	 * auto a set of semicolon-separated ppn/barcode/signature strings to be retrieved
-	 * fam boolean value if related titles should be retrieved
+	 * main method for answering jetty requests request query may contain parameters
+	 * ppn a set of semicolon-separated ppn strings to be retrieved barcode a set of
+	 * semicolon-separated barcode strings to be retrieved signature a set of
+	 * semicolon-separated signature strings to be retrieved auto a set of
+	 * semicolon-separated ppn/barcode/signature strings to be retrieved fam boolean
+	 * value if related titles should be retrieved
 	 */
 	@Override
 	public void doGet(HttpServletRequest request, HttpServletResponse response) throws IOException, ServletException {
-		response.setContentType("text/html; charset=UTF-8");
+		System.out.println("SRUEngine: Get by " + request.getRemoteHost());
+		response.setContentType("application/json; charset=UTF-8");
 		response.setCharacterEncoding("UTF-8");
 
-		String ppn = request.getParameter("ppn");
-		String barcode = request.getParameter("barcode");
-		String signature = request.getParameter("signature");
-		String auto = request.getParameter("auto");
-		
-		String fam = request.getParameter("fam");
+		DropbillRetriever retriever = null;
+		DatabaseConnection db = null;
+		try {
+			db = db_pool.getConnection();
+			// db_local = new DatabaseConnection(false, true);//currently, FR information is
+			// not needed
+			retriever = new DropbillRetriever(db, db_local);
+		} catch (ClassNotFoundException e) {
+			response.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR,
+					"{\"message\": \"Error: DB Driver not found\"}");
+			e.printStackTrace();
+			return;
+		} catch (SQLException e) {
+			response.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR,
+					"{\"message\": \"Error: DB Connection could not be established\"}");
+			e.printStackTrace();
+			return;
+		} catch (TooManyConnectionsException e) {
+			response.sendError(HttpServletResponse.SC_SERVICE_UNAVAILABLE,
+					"{\"message\": \"ERROR: Too many connections\"}");
+		}
+
+		// param handling
+		String[] ppns, barcodes, signatures, autos;
+		try {
+			ppns = ParamParsing.parseStringArray(request, "ppn", sep);
+			barcodes = ParamParsing.parseStringArray(request, "barcode", sep);
+			signatures = ParamParsing.parseStringArray(request, "signature", sep);
+			autos = ParamParsing.parseStringArray(request, "auto", sep);
+
+		} catch (Exception e) {
+			response.sendError(HttpServletResponse.SC_BAD_REQUEST, "{\"message\": \"ERROR while parsing parameters\"}");
+			return;
+		}
+
+		if ((ppns == null || ppns.length == 0) && (barcodes == null || barcodes.length == 0) && (signatures == null || signatures.length == 0) && (autos == null || autos.length == 0)) {
+			response.sendError(HttpServletResponse.SC_BAD_REQUEST, "{\"message\": \"ERROR: Wrong parameters\"}");
+			return;
+		}
 
 		List<Title> titles = null;
 
-		String[] ppns;
-		if (ppn != null)
-			ppns = ppn.split(sep);
-		else
-			ppns = new String[0];
-		String[] barcodes;
-		if (barcode != null)
-			barcodes = barcode.split(sep);
-		else
-			barcodes = new String[0];
-		String[] signatures;
-		if (signature != null)
-			signatures = signature.split(sep);
-		else
-			signatures = new String[0];
-		String[] autos;
-		if (auto != null)
-			autos = auto.split(sep);
-		else
-			autos = new String[0];
-		
-		boolean family = false;
-		if (fam != null) {
-			try {
-				family = Boolean.valueOf(fam);
-			} catch (Exception e) {
-				System.out.println(e);
-			}
-		}
-		
+		boolean family = ParamParsing.parseBoolean(request, "fam");
+
+		// processing
 		try {
 			titles = retriever.retrievePPN(ppns, barcodes, signatures, autos, family);
 		} catch (QueryErrorException e) {
-			response.getOutputStream().println(e.getMessage());
+			response.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR,
+					"{\"message\": \"" + e.getMessage() + "\"}");
+			e.printStackTrace();
+			return;
+		} finally {
+			try {
+				if (db != null)
+					db_pool.releaseConnection(db);
+			} catch (Exception e) {
+			}
 		}
 
 		if (titles != null) {
-			String result = ResponseFactoryJSON.getJSON(titles);
+			String result = gson.toJson(titles);
 			response.getOutputStream().println(result);
 		} else {
 			response.getOutputStream().println("");
 		}
+
+		if (db != null)
+			db_pool.releaseConnection(db);
 	}
 }

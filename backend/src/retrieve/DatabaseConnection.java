@@ -1,71 +1,122 @@
 package retrieve;
+
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.Map;
+import java.util.Properties;
+
+import javax.naming.InitialContext;
 
 public class DatabaseConnection {
-	
+
 	private Connection connection;
-	private static final String driverSybase = "net.sourceforge.jtds.jdbc.Driver";
-	
-	//Test DB
-	private static final String connectionXMDB = "jdbc:jtds:sybase://test-db.gbv.de:2025/xmdb;user=db-user;password=db-password;";
-	//Prod DB
-	private static final String connectionLHMDB = "jdbc:jtds:sybase://prod-db.gbv.de:2025/lbsdb;user=db-user;password=db-password;";
-	
+
 	public DatabaseConnection() throws ClassNotFoundException, SQLException {
-		this(driverSybase, connectionLHMDB);
+		this(false, false);
+	}
+
+	public DatabaseConnection(boolean test) throws ClassNotFoundException, SQLException {
+		this(test, false);
 	}
 	
+	public DatabaseConnection(Connection c) {
+		this.connection = c;
+	}
+
 	/**
 	 * 
 	 * @param test if the test database should be used
 	 * @throws ClassNotFoundException
 	 * @throws SQLException
 	 */
-	public DatabaseConnection(boolean test) throws ClassNotFoundException, SQLException {
-		if (test) this.dbConnection(driverSybase,connectionXMDB);
-		else this.dbConnection(driverSybase,connectionLHMDB);
+	@SuppressWarnings("unchecked")
+	public DatabaseConnection(boolean test, boolean local) throws ClassNotFoundException, SQLException {
+		if (local && test)
+			throw new IllegalArgumentException();
+		try {
+			String con, driver;
+			InitialContext initialContext = new InitialContext();
+			if (initialContext != null) {
+				Properties props = new Properties();
+				if (!local) {
+					Map<String, String> database_lbs = (Map<String, String>) initialContext
+							.lookup("java:/comp/env/database/lbs");
+					con = database_lbs.get("lbsdb_connection_string" + (test ? "_test" : ""));
+					driver = database_lbs.get("lbsdb_driver");
+				} else {
+					Map<String, String> database_local = (Map<String, String>) initialContext
+							.lookup("java:/comp/env/database/local");
+					con = database_local.get("localdb_connection_string");
+					driver = database_local.get("localdb_driver");
+					/*
+					 * int timeout = 5 * 60 * 1000; props.setProperty("tcpKeepAlive", "true");
+					 * props.setProperty("idle_session_timeout", ""+timeout);
+					 * props.setProperty("options", "-c statement_timeout=5min");
+					 */
+				}
+				this.dbConnection(driver, con, props);
+			}
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		if (this.connection == null)
+			throw new SQLException("connection null");
 	}
-	
-	DatabaseConnection(String driverName, String connectionName) throws ClassNotFoundException, SQLException {
+
+	public DatabaseConnection(String driverName, String connectionName) throws ClassNotFoundException, SQLException {
 		this.dbConnection(driverName, connectionName);
 	}
-	
+
 	@Override
 	public void finalize() throws SQLException {
-		this.dbDisconnect();
+		connection.close();
 	}
-	
-	
+
+	public boolean isValid() {
+		// not supported by jdts driver
+		// return this.connection.isValid(timeout);
+		ResultSet rs = null;
+		try {
+			// rs = this.sqlQuery("SELECT TOP 1 * from borrower");
+			rs = this.sqlQuery("sp_who");
+		} catch (SQLException e) {
+		}
+		return rs != null;
+	}
+
 	/**
 	 * loads drivers and establishes connection
-	 * @param driverName fully qualified class name of driver
+	 * 
+	 * @param driverName     fully qualified class name of driver
 	 * @param connectionName URL of DB connection
 	 * @throws ClassNotFoundException if the driver could not be identified
-	 * @throws SQLException  if the DB connection fails
+	 * @throws SQLException           if the DB connection fails
 	 */
 	void dbConnection(String driverName, String connectionName) throws ClassNotFoundException, SQLException {
 		Class.forName(driverName);
 		connection = DriverManager.getConnection(connectionName);
+		if (connection == null)
+			throw new SQLException("connection null");
 	}
-	
-	/**
-	 * closes connection to DB, should be called after queries have been sent
-	 * @throws SQLException 
-	 */
-	void dbDisconnect() throws SQLException {
-		connection.close();
+
+	void dbConnection(String driverName, String connectionName, Properties props)
+			throws ClassNotFoundException, SQLException {
+		Class.forName(driverName);
+		connection = DriverManager.getConnection(connectionName, props);
+		if (connection == null)
+			throw new SQLException("connection null");
 	}
-	
+
 	/**
 	 * executes a select query on the DB and retrieves result set
+	 * 
 	 * @param query SQL query
 	 * @return SQL ResultSet of query
-	 * @throws SQLException 
+	 * @throws SQLException
 	 */
 	public ResultSet sqlQuery(String query) throws SQLException {
 		ResultSet rs = null;
@@ -78,14 +129,19 @@ public class DatabaseConnection {
 
 	/**
 	 * executes an update query
+	 * 
 	 * @param query the SQL update statement
 	 * @return if the update has been successful (true) or not (false)
-	 * @throws SQLException 
+	 * @throws SQLException
 	 */
 	public boolean updateStatement(String query) throws SQLException {
 		PreparedStatement statement = connection.prepareStatement(query);
 		statement.executeUpdate();
 		return true;
+	}
+
+	public PreparedStatement initStatement(String query) throws SQLException {
+		return connection.prepareStatement(query);
 	}
 
 }
